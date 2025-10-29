@@ -866,14 +866,16 @@
                         </div>
                     ` : '';
 
+                    const fileSize = file.fileSize ? formatFileSize(file.fileSize) : (file.content ? formatFileSize(new Blob([file.content]).size) : '0 KB');
+
                     fileItem.innerHTML = `
                         <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
                         <div class="file-icon">📄</div>
                         <div class="file-name">${file.name}</div>
                         <div class="file-meta">
-                            <div class="file-meta-item">📅 Added: ${file.date}</div>
+                            <div class="file-meta-item">📅 ${file.date}</div>
                             ${file.lastRead ? `<div class="file-meta-item last-read">👁️ ${formatLastRead(file.lastRead)}</div>` : ''}
-                            ${file.fileSize ? `<div class="file-meta-item">💾 ${formatFileSize(file.fileSize)}</div>` : ''}
+                            <div class="file-meta-item">💾 ${fileSize}</div>
                         </div>
                         ${progressBar}
                     `;
