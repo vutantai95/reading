@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Reader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -69,8 +80,161 @@
             color: #666;
         }
 
+        .upload-options {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            color: #667eea;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
         input[type="file"] {
             display: none;
+        }
+
+        .library-section {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 30px;
+        }
+
+        .library-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .library-title {
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+
+        .sync-status {
+            font-size: 0.85rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .sync-status.synced {
+            color: #28a745;
+        }
+
+        .sync-status.error {
+            color: #dc3545;
+        }
+
+        .clear-btn {
+            padding: 8px 20px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .clear-btn:hover {
+            background: #ee5a52;
+            transform: translateY(-1px);
+        }
+
+        .file-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .file-item {
+            background: #f8f9ff;
+            border: 2px solid #e0e7ff;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .file-item:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .file-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-date {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .file-size {
+            font-size: 0.75rem;
+            color: #667eea;
+            margin-top: 3px;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-item:hover .delete-btn {
+            display: flex;
+        }
+
+        .delete-btn:hover {
+            background: #ee5a52;
+        }
+
+        .empty-library {
+            text-align: center;
+            padding: 40px;
+            color: #999;
         }
 
         .content-section {
@@ -79,10 +243,94 @@
             padding: 50px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             display: none;
+            position: relative;
         }
 
         .content-section.show {
             display: block;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .back-to-top.show {
+            display: flex;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .go-to-bottom {
+            position: fixed;
+            bottom: 90px;
+            right: 30px;
+            background: #f0f2ff;
+            color: #667eea;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            cursor: pointer;
+            font-size: 1.5rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .go-to-bottom.show {
+            display: flex;
+        }
+
+        .go-to-bottom:hover {
+            background: #e8ebff;
+            transform: translateY(-3px);
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f2ff;
+        }
+
+        .back-btn-top {
+            padding: 10px 25px;
+            background: #f0f2ff;
+            color: #667eea;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn-top:hover {
+            background: #e8ebff;
+            transform: translateX(-3px);
         }
 
         .document-content {
@@ -111,6 +359,20 @@
 
         .document-content strong {
             color: #764ba2;
+        }
+
+        .pdf-page {
+            margin-bottom: 20px;
+            border: 1px solid #e0e7ff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .pdf-page canvas {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+            height: auto;
         }
 
         .actions {
@@ -178,6 +440,7 @@
 
         @media (max-width: 768px) {
             .upload-section,
+            .library-section,
             .content-section {
                 padding: 25px;
                 border-radius: 15px;
@@ -185,6 +448,15 @@
 
             .upload-area {
                 padding: 40px 15px;
+            }
+
+            .file-list {
+                grid-template-columns: 1fr;
+            }
+
+            .library-header {
+                flex-direction: column;
+                gap: 15px;
             }
 
             .document-content {
@@ -203,9 +475,28 @@
         <div class="upload-section" id="uploadSection">
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📁</div>
-                <div class="upload-text">Drag and drop Word file here</div>
-                <div class="upload-subtext">or click to select file (.docx)</div>
-                <input type="file" id="fileInput" accept=".docx">
+                <div class="upload-text">Drag and drop Word or PDF file here</div>
+                <div class="upload-subtext">or click to select file (.docx, .pdf)</div>
+                <input type="file" id="fileInput" accept=".docx,.pdf">
+            </div>
+            <div class="upload-options">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="saveToLibrary" checked>
+                    <span>Save to library</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="library-section" id="librarySection">
+            <div class="library-header">
+                <div>
+                    <div class="library-title">📚 My Library</div>
+                    <div class="sync-status" id="syncStatus">Connecting...</div>
+                </div>
+                <button class="clear-btn" onclick="clearLibrary()" id="clearBtn" style="display: none;">🗑️ Clear all</button>
+            </div>
+            <div class="file-list" id="fileList">
+                <div class="empty-library">Loading...</div>
             </div>
         </div>
 
@@ -215,21 +506,273 @@
         </div>
 
         <div class="content-section" id="contentSection">
+            <div class="content-header">
+                <button class="back-btn-top" onclick="goBack()">← Back to library</button>
+            </div>
             <div class="document-content" id="documentContent"></div>
             <div class="actions">
-                <button class="btn btn-primary" onclick="uploadNew()">📤 Upload new file</button>
+                <button class="btn btn-primary" onclick="goBack()">← Back to library</button>
                 <button class="btn btn-secondary" onclick="printContent()">🖨️ Print document</button>
             </div>
         </div>
+
+        <!-- Floating Navigation Buttons -->
+        <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
+        <button class="go-to-bottom" id="goToBottom" onclick="scrollToBottom()">↓</button>
     </div>
 
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const uploadSection = document.getElementById('uploadSection');
+        const librarySection = document.getElementById('librarySection');
         const contentSection = document.getElementById('contentSection');
         const documentContent = document.getElementById('documentContent');
         const loading = document.getElementById('loading');
+        const fileList = document.getElementById('fileList');
+        const saveToLibrary = document.getElementById('saveToLibrary');
+        const clearBtn = document.getElementById('clearBtn');
+        const syncStatus = document.getElementById('syncStatus');
+        const backToTop = document.getElementById('backToTop');
+        const goToBottom = document.getElementById('goToBottom');
+
+        let db = null;
+        let savedFiles = [];
+
+        // Scroll tracking for floating buttons
+        window.addEventListener('scroll', () => {
+            if (contentSection.classList.contains('show')) {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+                
+                // Show back to top button when scrolled down 300px
+                if (scrollTop > 300) {
+                    backToTop.classList.add('show');
+                } else {
+                    backToTop.classList.remove('show');
+                }
+                
+                // Show go to bottom button when not at bottom
+                if (scrollTop + clientHeight < scrollHeight - 100) {
+                    goToBottom.classList.add('show');
+                } else {
+                    goToBottom.classList.remove('show');
+                }
+            } else {
+                backToTop.classList.remove('show');
+                goToBottom.classList.remove('show');
+            }
+        });
+
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        function scrollToBottom() {
+            window.scrollTo({
+                top: document.documentElement.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function calculateSize(content) {
+            // Calculate size in bytes (UTF-8 encoding)
+            return new Blob([content]).size;
+        }
+
+        function initializeFirebase() {
+            // Security check: only allow on authorized domain
+            const allowedDomains = ['vutantai95.github.io', 'localhost', '127.0.0.1'];
+            const currentDomain = window.location.hostname;
+            
+            if (!allowedDomains.includes(currentDomain)) {
+                console.error('Unauthorized domain');
+                syncStatus.textContent = '✗ Unauthorized';
+                syncStatus.className = 'sync-status error';
+                loadLocalLibrary();
+                return;
+            }
+
+            try {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCJYaAiza4mONfM9uAzHcTd04-7LyAnGzA",
+                    authDomain: "reader-a3660.firebaseapp.com",
+                    projectId: "reader-a3660",
+                    storageBucket: "reader-a3660.firebasestorage.app",
+                    messagingSenderId: "667053794535",
+                    appId: "1:667053794535:web:159d02d05ca311d6d8ee42"
+                };
+
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                syncStatus.textContent = '✓ Cloud synced';
+                syncStatus.className = 'sync-status synced';
+                loadLibrary();
+            } catch (error) {
+                console.error('Firebase error:', error);
+                syncStatus.textContent = '✗ Offline mode';
+                syncStatus.className = 'sync-status error';
+                loadLocalLibrary();
+            }
+        }
+
+        function loadLocalLibrary() {
+            try {
+                const saved = localStorage.getItem('word-library-local');
+                if (saved) {
+                    savedFiles = JSON.parse(saved);
+                }
+            } catch (error) {
+                savedFiles = [];
+            }
+            renderLibrary();
+        }
+
+        function saveLocalLibrary() {
+            localStorage.setItem('word-library-local', JSON.stringify(savedFiles));
+        }
+
+        async function loadLibrary() {
+            if (!db) {
+                loadLocalLibrary();
+                return;
+            }
+
+            try {
+                const snapshot = await db.collection('documents').orderBy('timestamp', 'desc').get();
+                savedFiles = [];
+                snapshot.forEach(doc => {
+                    savedFiles.push({ id: doc.id, ...doc.data() });
+                });
+                renderLibrary();
+            } catch (error) {
+                console.error('Load error:', error);
+                syncStatus.textContent = '✗ Load failed';
+                syncStatus.className = 'sync-status error';
+                loadLocalLibrary();
+            }
+        }
+
+        async function saveToFirebase(file) {
+            if (!db) {
+                savedFiles.unshift(file);
+                saveLocalLibrary();
+                renderLibrary();
+                return;
+            }
+
+            try {
+                await db.collection('documents').add({
+                    ...file,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                syncStatus.textContent = '✓ Cloud synced';
+                syncStatus.className = 'sync-status synced';
+                await loadLibrary();
+            } catch (error) {
+                console.error('Save error:', error);
+                syncStatus.textContent = '✗ Save failed';
+                syncStatus.className = 'sync-status error';
+                savedFiles.unshift(file);
+                saveLocalLibrary();
+                renderLibrary();
+            }
+        }
+
+        async function deleteFile(index) {
+            if (!confirm('Delete this document?')) return;
+
+            const file = savedFiles[index];
+
+            if (db && file.id) {
+                try {
+                    await db.collection('documents').doc(file.id).delete();
+                    await loadLibrary();
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    savedFiles.splice(index, 1);
+                    saveLocalLibrary();
+                    renderLibrary();
+                }
+            } else {
+                savedFiles.splice(index, 1);
+                saveLocalLibrary();
+                renderLibrary();
+            }
+        }
+
+        async function clearLibrary() {
+            if (!confirm('Clear all documents from library?')) return;
+
+            if (db) {
+                try {
+                    const snapshot = await db.collection('documents').get();
+                    const batch = db.batch();
+                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                    await loadLibrary();
+                } catch (error) {
+                    console.error('Clear error:', error);
+                    savedFiles = [];
+                    saveLocalLibrary();
+                    renderLibrary();
+                }
+            } else {
+                savedFiles = [];
+                saveLocalLibrary();
+                renderLibrary();
+            }
+        }
+
+        function renderLibrary() {
+            if (savedFiles.length === 0) {
+                fileList.innerHTML = '<div class="empty-library">No documents saved yet. Upload a file and check "Save to library"</div>';
+                clearBtn.style.display = 'none';
+            } else {
+                clearBtn.style.display = 'block';
+                fileList.innerHTML = '';
+                savedFiles.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    const sizeText = file.size ? formatBytes(file.size) : 'Unknown';
+                    const fileIcon = file.type === 'pdf' ? '📕' : '📄';
+                    fileItem.innerHTML = `
+                        <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
+                        <div class="file-icon">${fileIcon}</div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-date">${file.date}</div>
+                        <div class="file-size">📦 ${sizeText}</div>
+                    `;
+                    fileItem.onclick = () => loadSavedFile(index);
+                    fileList.appendChild(fileItem);
+                });
+            }
+        }
+
+        function loadSavedFile(index) {
+            uploadSection.style.display = 'none';
+            librarySection.style.display = 'none';
+            loading.classList.add('show');
+
+            setTimeout(() => {
+                documentContent.innerHTML = savedFiles[index].content;
+                loading.classList.remove('show');
+                contentSection.classList.add('show');
+                window.scrollTo(0, 0);
+            }, 300);
+        }
 
         uploadArea.addEventListener('click', () => {
             fileInput.click();
@@ -255,36 +798,93 @@
             e.preventDefault();
             uploadArea.classList.remove('dragover');
             const file = e.dataTransfer.files[0];
-            if (file && file.name.endsWith('.docx')) {
+            if (file && (file.name.endsWith('.docx') || file.name.endsWith('.pdf'))) {
                 processFile(file);
             } else {
-                alert('Please select a .docx file');
+                alert('Please select a .docx or .pdf file');
             }
         });
+
+        async function processPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            let htmlContent = '<div class="pdf-container">';
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const scale = 1.5;
+                const viewport = page.getViewport({ scale: scale });
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'pdf-page';
+                pageDiv.appendChild(canvas);
+                
+                htmlContent += pageDiv.outerHTML;
+            }
+            
+            htmlContent += '</div>';
+            return htmlContent;
+        }
 
         async function processFile(file) {
             try {
                 uploadSection.style.display = 'none';
+                librarySection.style.display = 'none';
                 loading.classList.add('show');
 
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                let htmlContent;
                 
-                documentContent.innerHTML = result.value;
+                if (file.name.endsWith('.pdf')) {
+                    htmlContent = await processPDF(file);
+                } else if (file.name.endsWith('.docx')) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                    htmlContent = result.value;
+                } else {
+                    throw new Error('Unsupported file type');
+                }
+                
+                documentContent.innerHTML = htmlContent;
+
+                if (saveToLibrary.checked) {
+                    const newFile = {
+                        name: file.name.replace(/\.(docx|pdf)$/, ''),
+                        content: htmlContent,
+                        date: new Date().toLocaleDateString(),
+                        size: calculateSize(htmlContent),
+                        type: file.name.endsWith('.pdf') ? 'pdf' : 'docx'
+                    };
+                    await saveToFirebase(newFile);
+                }
                 
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
+                saveToLibrary.checked = true;
+                window.scrollTo(0, 0);
             } catch (error) {
                 console.error('Error:', error);
                 alert('An error occurred while reading the file. Please try again.');
                 loading.classList.remove('show');
                 uploadSection.style.display = 'block';
+                librarySection.style.display = 'block';
             }
         }
 
-        function uploadNew() {
+        function goBack() {
             contentSection.classList.remove('show');
             uploadSection.style.display = 'block';
+            librarySection.style.display = 'block';
             documentContent.innerHTML = '';
             fileInput.value = '';
         }
@@ -316,6 +916,8 @@
             printWindow.document.close();
             printWindow.print();
         }
+
+        initializeFirebase();
     </script>
 </body>
 </html>
