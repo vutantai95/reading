@@ -9,7 +9,9 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
     </script>
     
     <!-- Firebase SDK -->
@@ -806,35 +808,51 @@
         });
 
         async function processPDF(file) {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            
-            let htmlContent = '<div class="pdf-container">';
-            
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const scale = 1.5;
-                const viewport = page.getViewport({ scale: scale });
+            try {
+                const arrayBuffer = await file.arrayBuffer();
                 
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
+                // Load PDF document
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdf = await loadingTask.promise;
                 
-                await page.render({
-                    canvasContext: context,
-                    viewport: viewport
-                }).promise;
+                let htmlContent = '<div class="pdf-container">';
                 
-                const pageDiv = document.createElement('div');
-                pageDiv.className = 'pdf-page';
-                pageDiv.appendChild(canvas);
+                // Render each page
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    
+                    // Set scale for good quality
+                    const scale = 1.5;
+                    const viewport = page.getViewport({ scale: scale });
+                    
+                    // Create canvas
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    // Render page to canvas
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    
+                    await page.render(renderContext).promise;
+                    
+                    // Add page to HTML
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'pdf-page';
+                    pageDiv.appendChild(canvas);
+                    
+                    htmlContent += pageDiv.outerHTML;
+                }
                 
-                htmlContent += pageDiv.outerHTML;
+                htmlContent += '</div>';
+                return htmlContent;
+            } catch (error) {
+                console.error('PDF processing error:', error);
+                throw new Error('Failed to process PDF: ' + error.message);
             }
-            
-            htmlContent += '</div>';
-            return htmlContent;
         }
 
         async function processFile(file) {
