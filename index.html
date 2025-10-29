@@ -6,14 +6,6 @@
     <title>Word Reader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     
-    <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        }
-    </script>
-    
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -197,15 +189,38 @@
             margin-bottom: 5px;
         }
 
-        .file-date {
-            font-size: 0.75rem;
-            color: #999;
+        .file-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-top: 8px;
         }
 
-        .file-size {
-            font-size: 0.75rem;
+        .file-meta-item {
+            font-size: 0.7rem;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .file-meta-item.last-read {
             color: #667eea;
-            margin-top: 3px;
+        }
+
+        .reading-progress {
+            margin-top: 8px;
+            height: 4px;
+            background: #e0e7ff;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .reading-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+            transition: width 0.3s ease;
         }
 
         .delete-btn {
@@ -363,20 +378,6 @@
             color: #764ba2;
         }
 
-        .pdf-page {
-            margin-bottom: 20px;
-            border: 1px solid #e0e7ff;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .pdf-page canvas {
-            display: block;
-            margin: 0 auto;
-            max-width: 100%;
-            height: auto;
-        }
-
         .actions {
             margin-top: 30px;
             display: flex;
@@ -477,9 +478,9 @@
         <div class="upload-section" id="uploadSection">
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📁</div>
-                <div class="upload-text">Drag and drop Word or PDF file here</div>
-                <div class="upload-subtext">or click to select file (.docx, .pdf)</div>
-                <input type="file" id="fileInput" accept=".docx,.pdf">
+                <div class="upload-text">Drag and drop Word file here</div>
+                <div class="upload-subtext">or click to select file (.docx)</div>
+                <input type="file" id="fileInput" accept=".docx">
             </div>
             <div class="upload-options">
                 <label class="checkbox-label">
@@ -540,8 +541,10 @@
 
         let db = null;
         let savedFiles = [];
+        let currentFileIndex = null;
+        let scrollSaveTimeout = null;
 
-        // Scroll tracking for floating buttons
+        // Scroll tracking for floating buttons and save position
         window.addEventListener('scroll', () => {
             if (contentSection.classList.contains('show')) {
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -560,6 +563,14 @@
                     goToBottom.classList.add('show');
                 } else {
                     goToBottom.classList.remove('show');
+                }
+
+                // Save scroll position with debounce
+                if (currentFileIndex !== null) {
+                    clearTimeout(scrollSaveTimeout);
+                    scrollSaveTimeout = setTimeout(() => {
+                        saveScrollPosition(scrollTop, scrollHeight);
+                    }, 1000);
                 }
             } else {
                 backToTop.classList.remove('show');
@@ -581,17 +592,76 @@
             });
         }
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        async function saveScrollPosition(scrollTop, scrollHeight) {
+            if (currentFileIndex === null) return;
+
+            const progress = Math.round((scrollTop / scrollHeight) * 100);
+            const file = savedFiles[currentFileIndex];
+            
+            file.scrollPosition = scrollTop;
+            file.scrollHeight = scrollHeight;
+            file.readingProgress = progress;
+            file.lastRead = new Date().toISOString();
+
+            if (db && file.id) {
+                try {
+                    await db.collection('documents').doc(file.id).update({
+                        scrollPosition: scrollTop,
+                        scrollHeight: scrollHeight,
+                        readingProgress: progress,
+                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Save scroll error:', error);
+                    saveLocalLibrary();
+                }
+            } else {
+                saveLocalLibrary();
+            }
         }
 
-        function calculateSize(content) {
-            // Calculate size in bytes (UTF-8 encoding)
-            return new Blob([content]).size;
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '0 KB';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function formatLastRead(dateStr) {
+            if (!dateStr) return 'Never';
+            
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            
+            return date.toLocaleDateString();
+        }
+
+        async function updateLastRead(index) {
+            const file = savedFiles[index];
+            file.lastRead = new Date().toISOString();
+
+            if (db && file.id) {
+                try {
+                    await db.collection('documents').doc(file.id).update({
+                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Update last read error:', error);
+                    saveLocalLibrary();
+                }
+            } else {
+                saveLocalLibrary();
+            }
         }
 
         function initializeFirebase() {
@@ -656,7 +726,12 @@
                 const snapshot = await db.collection('documents').orderBy('timestamp', 'desc').get();
                 savedFiles = [];
                 snapshot.forEach(doc => {
-                    savedFiles.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    // Convert Firestore Timestamp to ISO string for lastRead
+                    if (data.lastRead && data.lastRead.toDate) {
+                        data.lastRead = data.lastRead.toDate().toISOString();
+                    }
+                    savedFiles.push({ id: doc.id, ...data });
                 });
                 renderLibrary();
             } catch (error) {
@@ -748,14 +823,24 @@
                 savedFiles.forEach((file, index) => {
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
-                    const sizeText = file.size ? formatBytes(file.size) : 'Unknown';
-                    const fileIcon = file.type === 'pdf' ? '📕' : '📄';
+                    
+                    const progress = file.readingProgress || 0;
+                    const progressBar = progress > 0 ? `
+                        <div class="reading-progress">
+                            <div class="reading-progress-bar" style="width: ${progress}%"></div>
+                        </div>
+                    ` : '';
+
                     fileItem.innerHTML = `
                         <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
-                        <div class="file-icon">${fileIcon}</div>
+                        <div class="file-icon">📄</div>
                         <div class="file-name">${file.name}</div>
-                        <div class="file-date">${file.date}</div>
-                        <div class="file-size">📦 ${sizeText}</div>
+                        <div class="file-meta">
+                            <div class="file-meta-item">📅 Added: ${file.date}</div>
+                            ${file.lastRead ? `<div class="file-meta-item last-read">👁️ ${formatLastRead(file.lastRead)}</div>` : ''}
+                            ${file.fileSize ? `<div class="file-meta-item">💾 ${formatFileSize(file.fileSize)}</div>` : ''}
+                        </div>
+                        ${progressBar}
                     `;
                     fileItem.onclick = () => loadSavedFile(index);
                     fileList.appendChild(fileItem);
@@ -767,12 +852,29 @@
             uploadSection.style.display = 'none';
             librarySection.style.display = 'none';
             loading.classList.add('show');
+            currentFileIndex = index;
 
             setTimeout(() => {
                 documentContent.innerHTML = savedFiles[index].content;
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
-                window.scrollTo(0, 0);
+                
+                // Restore scroll position
+                const file = savedFiles[index];
+                if (file.scrollPosition && file.scrollHeight) {
+                    const currentScrollHeight = document.documentElement.scrollHeight;
+                    const ratio = file.scrollPosition / file.scrollHeight;
+                    const newScrollPosition = ratio * currentScrollHeight;
+                    
+                    setTimeout(() => {
+                        window.scrollTo(0, newScrollPosition);
+                    }, 100);
+                } else {
+                    window.scrollTo(0, 0);
+                }
+
+                // Update last read
+                updateLastRead(index);
             }, 300);
         }
 
@@ -800,60 +902,12 @@
             e.preventDefault();
             uploadArea.classList.remove('dragover');
             const file = e.dataTransfer.files[0];
-            if (file && (file.name.endsWith('.docx') || file.name.endsWith('.pdf'))) {
+            if (file && file.name.endsWith('.docx')) {
                 processFile(file);
             } else {
-                alert('Please select a .docx or .pdf file');
+                alert('Please select a .docx file');
             }
         });
-
-        async function processPDF(file) {
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                
-                // Load PDF document
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                const pdf = await loadingTask.promise;
-                
-                let htmlContent = '<div class="pdf-container">';
-                
-                // Render each page
-                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                    const page = await pdf.getPage(pageNum);
-                    
-                    // Set scale for good quality
-                    const scale = 1.5;
-                    const viewport = page.getViewport({ scale: scale });
-                    
-                    // Create canvas
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    
-                    // Render page to canvas
-                    const renderContext = {
-                        canvasContext: context,
-                        viewport: viewport
-                    };
-                    
-                    await page.render(renderContext).promise;
-                    
-                    // Add page to HTML
-                    const pageDiv = document.createElement('div');
-                    pageDiv.className = 'pdf-page';
-                    pageDiv.appendChild(canvas);
-                    
-                    htmlContent += pageDiv.outerHTML;
-                }
-                
-                htmlContent += '</div>';
-                return htmlContent;
-            } catch (error) {
-                console.error('PDF processing error:', error);
-                throw new Error('Failed to process PDF: ' + error.message);
-            }
-        }
 
         async function processFile(file) {
             try {
@@ -861,29 +915,27 @@
                 librarySection.style.display = 'none';
                 loading.classList.add('show');
 
-                let htmlContent;
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
                 
-                if (file.name.endsWith('.pdf')) {
-                    htmlContent = await processPDF(file);
-                } else if (file.name.endsWith('.docx')) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
-                    htmlContent = result.value;
-                } else {
-                    throw new Error('Unsupported file type');
-                }
-                
-                documentContent.innerHTML = htmlContent;
+                documentContent.innerHTML = result.value;
 
                 if (saveToLibrary.checked) {
                     const newFile = {
-                        name: file.name.replace(/\.(docx|pdf)$/, ''),
-                        content: htmlContent,
+                        name: file.name.replace('.docx', ''),
+                        content: result.value,
                         date: new Date().toLocaleDateString(),
-                        size: calculateSize(htmlContent),
-                        type: file.name.endsWith('.pdf') ? 'pdf' : 'docx'
+                        fileSize: file.size,
+                        lastRead: new Date().toISOString(),
+                        scrollPosition: 0,
+                        scrollHeight: 0,
+                        readingProgress: 0
                     };
                     await saveToFirebase(newFile);
+                    // Set current index to the newly added file (which will be at index 0)
+                    currentFileIndex = 0;
+                } else {
+                    currentFileIndex = null;
                 }
                 
                 loading.classList.remove('show');
@@ -905,6 +957,8 @@
             librarySection.style.display = 'block';
             documentContent.innerHTML = '';
             fileInput.value = '';
+            currentFileIndex = null;
+            renderLibrary(); // Refresh to show updated last read times
         }
 
         function printContent() {
