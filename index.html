@@ -324,6 +324,35 @@
             transform: translateY(-3px);
         }
 
+        .floating-back-btn {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-back-btn.show {
+            display: flex;
+        }
+
+        .floating-back-btn:hover {
+            transform: translateX(-3px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
         .content-header {
             display: flex;
             justify-content: space-between;
@@ -520,6 +549,7 @@
         </div>
 
         <!-- Floating Navigation Buttons -->
+        <button class="floating-back-btn" id="floatingBackBtn" onclick="goBack()">← Back to library</button>
         <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
         <button class="go-to-bottom" id="goToBottom" onclick="scrollToBottom()">↓</button>
     </div>
@@ -538,6 +568,7 @@
         const syncStatus = document.getElementById('syncStatus');
         const backToTop = document.getElementById('backToTop');
         const goToBottom = document.getElementById('goToBottom');
+        const floatingBackBtn = document.getElementById('floatingBackBtn');
 
         let db = null;
         let savedFiles = [];
@@ -550,6 +581,9 @@
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
                 const scrollHeight = document.documentElement.scrollHeight;
                 const clientHeight = document.documentElement.clientHeight;
+                
+                // Always show floating back button when reading
+                floatingBackBtn.classList.add('show');
                 
                 // Show back to top button when scrolled down 300px
                 if (scrollTop > 300) {
@@ -573,6 +607,7 @@
                     }, 1000);
                 }
             } else {
+                floatingBackBtn.classList.remove('show');
                 backToTop.classList.remove('show');
                 goToBottom.classList.remove('show');
             }
@@ -859,6 +894,9 @@
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
                 
+                // Show floating back button immediately
+                floatingBackBtn.classList.add('show');
+                
                 // Restore scroll position
                 const file = savedFiles[index];
                 if (file.scrollPosition && file.scrollHeight) {
@@ -942,6 +980,9 @@
                 contentSection.classList.add('show');
                 saveToLibrary.checked = true;
                 window.scrollTo(0, 0);
+                
+                // Show floating back button immediately
+                floatingBackBtn.classList.add('show');
             } catch (error) {
                 console.error('Error:', error);
                 alert('An error occurred while reading the file. Please try again.');
