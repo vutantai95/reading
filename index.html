@@ -276,7 +276,7 @@
         .back-to-top {
             position: fixed;
             bottom: 30px;
-            right: 20px;
+            right: 70px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             width: 40px;
@@ -304,7 +304,7 @@
 
         .go-to-bottom {
             position: fixed;
-            bottom: 80px;
+            bottom: 30px;
             right: 20px;
             background: #f0f2ff;
             color: #667eea;
@@ -590,22 +590,10 @@
                 const scrollHeight = document.documentElement.scrollHeight;
                 const clientHeight = document.documentElement.clientHeight;
                 
-                // Always show floating back button when reading
+                // Always show all buttons when reading
                 floatingBackBtn.classList.add('show');
-                
-                // Show back to top button when scrolled down 300px
-                if (scrollTop > 300) {
-                    backToTop.classList.add('show');
-                } else {
-                    backToTop.classList.remove('show');
-                }
-                
-                // Show go to bottom button when not at bottom
-                if (scrollTop + clientHeight < scrollHeight - 100) {
-                    goToBottom.classList.add('show');
-                } else {
-                    goToBottom.classList.remove('show');
-                }
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
 
                 // Save scroll position with debounce
                 if (currentFileIndex !== null) {
@@ -920,6 +908,8 @@
                 
                 // Show floating back button immediately
                 floatingBackBtn.classList.add('show');
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
                 
                 // Restore scroll position
                 const file = savedFiles[index];
@@ -1007,6 +997,8 @@
                 
                 // Show floating back button immediately
                 floatingBackBtn.classList.add('show');
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
             } catch (error) {
                 console.error('Error:', error);
                 alert('An error occurred while reading the file. Please try again.');
